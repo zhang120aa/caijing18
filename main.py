@@ -455,3 +455,6 @@ def main():
             port=5000,
             debug=False
         )
+if __name__ == '__main__':
+    main()
+
