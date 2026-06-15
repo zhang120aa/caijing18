@@ -7,6 +7,7 @@ services:
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
     volumes:
-      # 1. 仅挂载数据库文件或数据文件夹，不要覆盖整个 /app
-      - ./data:/app/data 
+      # 将宿主机的 data 目录映射到容器内的 /app/data
+      # 这样程序代码在 /app 下不受影响，数据库文件存在 data 中
+      - ./data:/app/data
     restart: unless-stopped
