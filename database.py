@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, Text, Float, Ind
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
+import os
 import config
 
 Base = declarative_base()
@@ -25,12 +26,37 @@ class FinanceNews(Base):
         Index('idx_tags', 'tags'),
     )
 
-# 初始化数据库
-engine = create_engine(config.DATABASE_URL, connect_args={"check_same_thread": False})
-Base.metadata.create_all(engine)
+# ============ 数据库初始化 ============
+def init_database():
+    """初始化数据库连接"""
+    try:
+        # 确保数据目录存在
+        db_dir = config.APP_DATA_DIR
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        
+        # 创建引擎
+        engine = create_engine(
+            config.DATABASE_URL,
+            connect_args={"check_same_thread": False}
+        )
+        
+        # 创建所有表
+        Base.metadata.create_all(engine)
+        
+        print(f"✅ [数据库] 初始化成功: {config.DB_PATH}")
+        return engine
+    
+    except Exception as e:
+        print(f"❌ [数据库] 初始化失败: {e}")
+        raise
+
+# 初始化引擎和Session工厂
+engine = init_database()
 SessionLocal = sessionmaker(bind=engine)
 
 def get_session():
+    """获取数据库会话"""
     return SessionLocal()
 
 def cleanup_old_data():
@@ -42,10 +68,12 @@ def cleanup_old_data():
             FinanceNews.created_time < cutoff_date
         ).delete()
         session.commit()
-        print(f"[数据清理] 删除了 {deleted} 条过期数据")
+        print(f"✅ [数据清理] 删除了 {deleted} 条过期数据 (7天前)")
+        return deleted
     except Exception as e:
-        print(f"[数据清理] 错误: {e}")
+        print(f"❌ [数据清理] 错误: {e}")
         session.rollback()
+        return 0
     finally:
         session.close()
 
@@ -64,10 +92,10 @@ def save_news(news_id, title, content, tags, url=None, message_id=None):
         )
         session.add(news)
         session.commit()
-        print(f"[数据库] 保存新闻: {news_id}")
+        print(f"✅ [数据库] 保存新闻: {news_id}")
         return True
     except Exception as e:
-        print(f"[数据库] 错误: {e}")
+        print(f"❌ [数据库] 保存失败: {e}")
         session.rollback()
         return False
     finally:
@@ -81,6 +109,9 @@ def get_all_news(limit=100, offset=0):
             FinanceNews.published_time.desc()
         ).limit(limit).offset(offset).all()
         return news
+    except Exception as e:
+        print(f"❌ [数据库] 查询失败: {e}")
+        return []
     finally:
         session.close()
 
@@ -94,6 +125,9 @@ def search_news(keyword, limit=50):
             (FinanceNews.tags.like(f'%{keyword}%'))
         ).order_by(FinanceNews.published_time.desc()).limit(limit).all()
         return results
+    except Exception as e:
+        print(f"❌ [数据库] 搜索失败: {e}")
+        return []
     finally:
         session.close()
 
@@ -105,6 +139,9 @@ def get_news_by_tag(tag, limit=50):
             FinanceNews.tags.like(f'%{tag}%')
         ).order_by(FinanceNews.published_time.desc()).limit(limit).all()
         return results
+    except Exception as e:
+        print(f"❌ [数据库] 按标签查询失败: {e}")
+        return []
     finally:
         session.close()
 
@@ -113,9 +150,39 @@ def get_stats():
     session = get_session()
     try:
         total = session.query(FinanceNews).count()
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         today = session.query(FinanceNews).filter(
-            FinanceNews.created_time >= datetime.utcnow().replace(hour=0, minute=0, second=0)
+            FinanceNews.created_time >= today_start
         ).count()
         return {'total': total, 'today': today}
+    except Exception as e:
+        print(f"❌ [数据库] 统计失败: {e}")
+        return {'total': 0, 'today': 0}
+    finally:
+        session.close()
+
+def get_database_info():
+    """获取数据库信息"""
+    session = get_session()
+    try:
+        total = session.query(FinanceNews).count()
+        oldest = session.query(FinanceNews).order_by(
+            FinanceNews.created_time.asc()
+        ).first()
+        newest = session.query(FinanceNews).order_by(
+            FinanceNews.created_time.desc()
+        ).first()
+        
+        return {
+            'total': total,
+            'db_path': config.DB_PATH,
+            'data_dir': config.APP_DATA_DIR,
+            'oldest_news': oldest.created_time.isoformat() if oldest else None,
+            'newest_news': newest.created_time.isoformat() if newest else None,
+            'db_size_mb': os.path.getsize(config.DB_PATH) / (1024 * 1024) if os.path.exists(config.DB_PATH) else 0
+        }
+    except Exception as e:
+        print(f"❌ [数据库] 获取信息失败: {e}")
+        return {}
     finally:
         session.close()
