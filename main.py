@@ -451,7 +451,6 @@ def main():
     try:
         # 当 Docker 运行时，host 设置为 0.0.0.0，端口为 5000
         app.run(
-        app.run(
             host='0.0.0.0',
             port=5000,
             debug=False
