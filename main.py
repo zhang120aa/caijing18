@@ -5,7 +5,6 @@ import os
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import cleanup_old_data, get_session, FinanceNews, get_database_info
-from telegram_bot import get_bot
 from web.app import app
 import config
 
@@ -36,9 +35,9 @@ class FinanceBot:
     """主应用程序"""
     
     def __init__(self):
-        self.bot = get_bot()
         self.scheduler = BackgroundScheduler()
         self.web_thread = None
+        self.bot_app = None
     
     def setup_scheduler(self):
         """设置定时任务"""
@@ -90,18 +89,18 @@ class FinanceBot:
         self.web_thread.start()
         logger.info(f"✅ [Web服务] 启动在 http://{config.FLASK_HOST}:{config.FLASK_PORT}")
     
-    async def start_telegram_bot(self):
-        """启动Telegram机器人"""
-        logger.info("🤖 [Telegram] 机器人启动中...")
-        try:
-            await self.bot.run()
-        except Exception as e:
-            logger.error(f"❌ [Telegram] 错误: {e}")
-            # 自动重连
-            await asyncio.sleep(5)
-            await self.start_telegram_bot()
+    def start_telegram_bot_sync(self):
+        """在单独线程中启动Telegram机器人（同步包装）"""
+        from telegram_bot import main as telegram_main
+        
+        bot_thread = threading.Thread(
+            target=telegram_main,
+            daemon=True
+        )
+        bot_thread.start()
+        logger.info("✅ [Telegram] 机器人已启动")
     
-    async def run(self):
+    def run(self):
         """运行整个应用"""
         logger.info("=" * 60)
         logger.info("🚀 财经机器人启动")
@@ -112,31 +111,43 @@ class FinanceBot:
         logger.info(f"📝 日志文件: {config.LOG_FILE}")
         logger.info("=" * 60)
         
-        # 启动定时任务
-        self.setup_scheduler()
+        try:
+            # 启动定时任务
+            self.setup_scheduler()
+            
+            # 启动Web服务
+            self.start_web_server()
+            
+            # 稍微延迟，确保Web服务启动
+            import time
+            time.sleep(2)
+            
+            # 启动Telegram机器人
+            self.start_telegram_bot_sync()
+            
+            # 保持主线程运行
+            logger.info("=" * 60)
+            logger.info("✅ 所有服务已启动，按 Ctrl+C 停止")
+            logger.info("=" * 60)
+            
+            while True:
+                time.sleep(1)
         
-        # 启动Web服务
-        self.start_web_server()
-        
-        # 等待Web服务启动
-        await asyncio.sleep(2)
-        
-        # 启动Telegram机器人
-        await self.start_telegram_bot()
+        except KeyboardInterrupt:
+            logger.info("\n⏹️ [关闭] 机器人正在关闭...")
+            if self.scheduler.running:
+                self.scheduler.shutdown()
+            logger.info("✅ [关闭] 机器人已关闭")
+        except Exception as e:
+            logger.error(f"❌ [错误] 程序崩溃: {e}", exc_info=True)
+        finally:
+            if self.scheduler.running:
+                self.scheduler.shutdown()
 
 def main():
     """主入口"""
     finance_bot = FinanceBot()
-    
-    try:
-        asyncio.run(finance_bot.run())
-    except KeyboardInterrupt:
-        logger.info("\n⏹️ [关闭] 机器人正在关闭...")
-        if finance_bot.scheduler.running:
-            finance_bot.scheduler.shutdown()
-        logger.info("✅ [关闭] 机器人已关闭")
-    except Exception as e:
-        logger.error(f"❌ [错误] 程序崩溃: {e}", exc_info=True)
+    finance_bot.run()
 
 if __name__ == '__main__':
     main()
