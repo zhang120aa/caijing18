@@ -4,20 +4,23 @@ services:
   app:
     build: .
     container_name: caijing18_app
-    volumes:
-      - ./data:/app/data
-    environment:
-      - DATABASE_PATH=/app/data/finance_data.db
-    # 其他配置...
-
-  telegram_bot:
-    build: .
-    container_name: caijing18_bot
-    command: python telegram_bot.py
+    ports:
+      - "5000:5000"
     volumes:
       - ./data:/app/data
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-    restart: always
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
     depends_on:
-      - app
+      - telegram_bot
+    command: python main.py
+
+  telegram_bot:
+    build: .
+    container_name: caijing18_bot
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+    command: python telegram_bot.py
