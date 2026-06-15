@@ -30,6 +30,8 @@ echo "TELEGRAM_BOT_TOKEN=your_bot_token_here" > .env
 python main.py
 ```
 程序启动后，Telegram 机器人将开始监听，同时在 http://localhost:5000 启动管理面板。
+
+---
 # 📂 项目结构
 
 ```bash
@@ -73,6 +75,8 @@ caijing18/
 | `/api/stats` | `GET` | 获取数据库总数与统计看板信息 |
 | `/api/cleanup` | `POST` | 手动触发过期数据清理 |
 
+---
+
 # 🌐 docker-compose
 使用 docker-compose（推荐）
 在项目根目录创建 .env 文件：
@@ -110,6 +114,6 @@ docker run -d \
 docker ps
 docker logs caijing18
 ```
-
+---
 # ⚖️ 许可证
 本项目基于 MIT License 开源。
